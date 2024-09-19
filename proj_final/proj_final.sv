@@ -13,18 +13,31 @@ module relogio_digital(
     logic ajuste, timer_ativo, cronometro_ativo;
     logic reset, set, start_stop;
     logic alarme;
-	 logic start_stop_prev;
+    logic start_stop_prev;
 
-    assign modo = SW[16:15];
-    assign ajuste = SW[17];
-    assign reset = ~KEY[0];
-    assign set = ~KEY[1];
-    assign start_stop = ~KEY[3];
+    // Variaveis globais
+    reg [7:0] hex7_temp;
+    reg [7:0] hex6_temp;
+    reg [7:0] hex5_temp;
+    reg [7:0] hex4_temp;
+    reg [7:0] hex3_temp;
+    reg [7:0] hex2_temp;
+    reg [7:0] hex1_temp;
+    reg [7:0] hex0_temp;
+
+
+    // Configuracao inicial baseada nas entradas
+    assign modo = SW[16:15];     // Modos: 00=Relogio, 01=Cronometro, 10=Timer
+    assign ajuste = SW[17];      // Indica se esta em modo de ajuste
+    assign reset = ~KEY[0];     // Reset geral
+    assign set = ~KEY[1];       // Botao para definir tempo
+    assign start_stop = ~KEY[3]; // Iniciar/Pausar cronometro
 
     // Divisor de clock para 100Hz 
     logic [31:0] contador_100hz;
     logic clk_100hz;
 
+    // Gera um clock de 100Hz
     always_ff @(posedge clk) begin
         if (contador_100hz == 32'd500000) begin
             contador_100hz <= 32'd0;
@@ -46,10 +59,10 @@ module relogio_digital(
                 cronometro_ativo <= 1'b0;
             end else begin
                 case (modo)
-                    2'b00: begin // Relógio
+                    2'b00: begin // Relogio
                         // Nao faz nada
                     end
-                    2'b01: begin // Cronômetro
+                    2'b01: begin // Cronometro
                         centesimos <= 7'd0;
                         segundos <= 6'd0;
                         minutos <= 6'd0;
@@ -63,7 +76,7 @@ module relogio_digital(
             end
         end else begin
             case (modo)
-                2'b00: begin // Relógio
+                2'b00: begin // Relogio
                     if (cronometro_ativo || timer_ativo) begin
                         centesimos <= centesimos + 1'b1;
                         if (centesimos == 7'd99) begin
@@ -80,7 +93,7 @@ module relogio_digital(
                         end
                     end
                 end
-                2'b01: begin // Cronômetro
+                2'b01: begin // Cronometro
                     if (cronometro_ativo) begin
                         centesimos <= centesimos + 1'b1;
                         if (centesimos == 7'd99) begin
@@ -118,28 +131,27 @@ module relogio_digital(
         end
     end
 
-	
-	logic [6:0] hex7_temp, hex6_temp, hex5_temp, hex4_temp, hex3_temp, hex2_temp, hex1_temp, hex0_temp;
-    // conversao display
+    // Funcao para converter numeros para display de 7 segmentos
     function logic [6:0] to_7seg(input logic [3:0] valor);
         case (valor)
-            4'h0: return 7'b1000000;
-            4'h1: return 7'b1111001;
-            4'h2: return 7'b0100100;
-            4'h3: return 7'b0110000;
-            4'h4: return 7'b0011001;
-            4'h5: return 7'b0010010;
-            4'h6: return 7'b0000010;
-            4'h7: return 7'b1111000;
-            4'h8: return 7'b0000000;
-            4'h9: return 7'b0010000;
-            default: return 7'b1111111;
+            4'h0: return 7'b1000000; // 0
+            4'h1: return 7'b1111001; // 1
+            4'h2: return 7'b0100100; // 2
+            4'h3: return 7'b0110000; // 3
+            4'h4: return 7'b0011001; // 4
+            4'h5: return 7'b0010010; // 5
+            4'h6: return 7'b0000010; // 6
+            4'h7: return 7'b1111000; // 7
+            4'h8: return 7'b0000000; // 8
+            4'h9: return 7'b0010000; // 9
+            default: return 7'b1111111; // Caractere nao reconhecido
         endcase
     endfunction
 
+    // Logica para controlar o display
     always_comb begin
         case (modo)
-            2'b00: begin //relogio
+            2'b00: begin // Relogio
                 hex7_temp = to_7seg(horas / 10);
                 hex6_temp = to_7seg(horas % 10);
                 hex5_temp = to_7seg(minutos / 10);
@@ -149,7 +161,7 @@ module relogio_digital(
                 hex1_temp = to_7seg(centesimos / 10);
                 hex0_temp = to_7seg(centesimos % 10);
             end
-            2'b01: begin // cronometro
+            2'b01: begin // Cronometro
                 hex7_temp = 7'b1111111;
                 hex6_temp = 7'b1111111;
                 hex5_temp = to_7seg(minutos / 10);
@@ -186,6 +198,7 @@ module relogio_digital(
     logic [22:0] blink_counter;
     logic blink_state;
 
+    // Gera um sinal de piscar a cada 5000000 ticks do clock
     always_ff @(posedge clk) begin
         if (blink_counter == 23'd5000000) begin
             blink_counter <= 23'd0;
@@ -195,6 +208,7 @@ module relogio_digital(
         end
     end
 
+    // Controla o display com base na logica de piscar
     always_comb begin
         HEX7 = hex7_temp;
         HEX6 = hex6_temp;
@@ -207,7 +221,7 @@ module relogio_digital(
 
         if (ajuste) begin
             case (modo)
-                2'b00: begin // Ajuste do relÃƒÂ³gio
+                2'b00: begin // Ajuste do relogio
                     if (horas == 6'd0 && minutos == 6'd0 && segundos == 6'd0) begin
                         HEX7 = blink_state ? hex7_temp : 7'b1111111;
                         HEX6 = blink_state ? hex6_temp : 7'b1111111;
